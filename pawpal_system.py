@@ -8,10 +8,19 @@ Task, Pet, Owner, and Scheduler.
 """
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 
 # Lower number = more important. Used to order tasks in the scheduler.
 _PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
+
+
+class TaskStatus(str, Enum):
+    """Where a task stands in today's plan."""
+
+    TODO = "todo"  # not done yet
+    DONE = "done"  # completed
+    SKIPPED = "skipped"  # left out of the plan (e.g., no time left)
 
 
 @dataclass
@@ -22,15 +31,20 @@ class Task:
     duration: int  # minutes the task takes
     priority: str = "medium"  # "high", "medium", or "low"
     frequency: str = "daily"  # e.g., "daily", "twice daily", "weekly"
-    completed: bool = False
+    start_time: str = ""  # scheduled time of day, e.g. "08:00" ("" = unscheduled)
+    status: TaskStatus = TaskStatus.TODO
 
     def mark_complete(self) -> None:
         """Mark this task as done for today."""
-        self.completed = True
+        self.status = TaskStatus.DONE
 
     def mark_incomplete(self) -> None:
-        """Reset this task back to not-done."""
-        self.completed = False
+        """Reset this task back to not-done (todo)."""
+        self.status = TaskStatus.TODO
+
+    def mark_skipped(self) -> None:
+        """Mark this task as skipped from today's plan."""
+        self.status = TaskStatus.SKIPPED
 
     def priority_rank(self) -> int:
         """Numeric priority for sorting (unknown values sort last)."""
@@ -38,10 +52,10 @@ class Task:
 
     def summary(self) -> str:
         """Return a short, human-readable description of the task."""
-        status = "done" if self.completed else "todo"
+        when = f" at {self.start_time}" if self.start_time else ""
         return (
-            f"{self.name} — {self.duration} min, "
-            f"{self.priority} priority, {self.frequency} [{status}]"
+            f"{self.name}{when} — {self.duration} min, "
+            f"{self.priority} priority, {self.frequency} [{self.status.value}]"
         )
 
 
@@ -91,6 +105,19 @@ class Owner:
             tasks.extend(pet.list_tasks())
         return tasks
 
+    def filter_tasks(self, pet_name=None, status=None) -> list[Task]:
+        """Return tasks, optionally limited to one pet and/or one status."""
+        tasks: list[Task] = []
+        for pet in self.pets:
+            if pet_name is not None and pet.name != pet_name:
+                continue  # skip pets we didn't ask for
+            tasks.extend(pet.list_tasks())
+        if status is not None:
+            # TaskStatus is a str Enum, so this also matches plain strings
+            # like "done" or "todo".
+            tasks = [t for t in tasks if t.status == status]
+        return tasks
+
     def build_scheduler(self) -> "Scheduler":
         """Collect all pet tasks and hand them to a Scheduler with the time budget."""
         return Scheduler(self.all_tasks(), self.available_minutes)
@@ -115,19 +142,36 @@ class Scheduler:
         """Order tasks by priority, then by shortest duration."""
         return sorted(self.tasks, key=lambda t: (t.priority_rank(), t.duration))
 
+    def sort_by_time(self) -> list[Task]:
+        """Order tasks chronologically by 'HH:MM' start_time (unscheduled last)."""
+        # Convert "HH:MM" to minutes-since-midnight; "" (unscheduled) sorts last.
+        def minutes(task: Task) -> float:
+            if not task.start_time:
+                return float("inf")
+            hours, mins = task.start_time.split(":")
+            return int(hours) * 60 + int(mins)
+
+        return sorted(self.tasks, key=minutes)
+
     def generate_plan(self) -> list[Task]:
         """Greedily pick tasks in priority order that fit the time budget."""
         plan: list[Task] = []
         skipped: list[tuple[Task, str]] = []
         remaining = self.available_minutes
 
+        # Clear any prior "skipped" marks so re-running the plan is repeatable.
+        for task in self.tasks:
+            if task.status == TaskStatus.SKIPPED:
+                task.mark_incomplete()
+
         for task in self.sort_tasks():
-            if task.completed:
+            if task.status == TaskStatus.DONE:
                 skipped.append((task, "already completed"))
             elif task.duration <= remaining:
                 plan.append(task)
                 remaining -= task.duration
             else:
+                task.mark_skipped()
                 skipped.append(
                     (task, f"needs {task.duration} min, only {remaining} left")
                 )
