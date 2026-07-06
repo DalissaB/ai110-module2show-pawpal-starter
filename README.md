@@ -77,14 +77,58 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+Beyond the basic plan, PawPal+ adds four "smarter scheduling" features. All of
+the logic lives in `pawpal_system.py`.
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_tasks()`, `Scheduler.sort_by_time()` | By priority + duration, or chronologically by start time |
+| Filtering | `Owner.filter_tasks(pet_name, status)` | Narrow tasks by pet and/or completion status |
+| Conflict detection | `Scheduler.find_conflicts()`, `Scheduler.conflict_warnings()` | Flags tasks sharing a start time; returns warnings, never crashes |
+| Recurring tasks | `Task.next_occurrence()`, `Pet.complete_task()` | Completing a daily/weekly task auto-creates the next one |
+
+### Sorting behavior
+
+Two sort orders are available on the `Scheduler`:
+
+- **`Scheduler.sort_tasks()`** orders tasks by priority (high → low), then by
+  shortest duration as a tiebreak. This is what `generate_plan()` uses to decide
+  what to schedule first.
+- **`Scheduler.sort_by_time()`** orders tasks chronologically by their `"HH:MM"`
+  `start_time`. Times are converted to minutes-since-midnight for the sort key
+  (robust to un-padded values), and unscheduled tasks sort to the end.
+
+### Filtering behavior
+
+**`Owner.filter_tasks(pet_name=None, status=None)`** returns tasks across all
+pets, optionally narrowed:
+
+- by **pet** — pass `pet_name="Rex"` to get just that pet's tasks;
+- by **status** — pass `status=TaskStatus.DONE` (or the plain string `"done"`,
+  since `TaskStatus` is a `str` enum) to get only completed/todo/skipped tasks;
+- or **both** at once. With no arguments it returns every task.
+
+### Conflict detection logic
+
+**`Scheduler.find_conflicts()`** compares every pair of *scheduled* tasks (those
+with a `start_time`) once and returns the pairs that share the same start time —
+whether they belong to the same pet or different pets (an owner can't be in two
+places at once). Unscheduled tasks are ignored.
+
+**`Scheduler.conflict_warnings()`** wraps that into a lightweight, non-crashing
+check: it returns a list of human-readable warning strings (e.g.
+`⚠️ Conflict at 08:00: 'Morning walk' overlaps with 'Play time'.`) and an empty
+list when there are none — so the app warns the user instead of failing.
+
+### Recurring task logic
+
+Each `Task` has a `frequency` (`"daily"`, `"weekly"`, or `"once"`) and a
+`due_date`. **`Task.next_occurrence()`** uses `datetime.timedelta` to advance the
+due date (`+1 day` for daily, `+7 days` for weekly) and returns a fresh `TODO`
+copy, or `None` if the task doesn't repeat. **`Pet.complete_task(task)`** ties it
+together: it marks the task `DONE` and, if it recurs, automatically adds the next
+occurrence to the pet — so a daily walk reappears tomorrow and a weekly groom
+reappears next week.
 
 ## 📸 Demo Walkthrough
 

@@ -2,7 +2,7 @@ from datetime import time
 
 import streamlit as st
 
-from pawpal_system import Owner, Pet, Scheduler, Task
+from pawpal_system import Owner, Pet, Scheduler, Task, TaskStatus
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -97,9 +97,13 @@ else:
         # Scheduled time of day; stored on the Task as an "HH:MM" string.
         start = st.time_input("Start time", value=time(8, 0))
 
-    # Choose which pet receives the task.
+    # Choose which pet receives the task and how often it repeats.
     pet_names = [pet.name for pet in pets]
-    target_name = st.selectbox("For which pet?", pet_names)
+    col_pet, col_freq = st.columns(2)
+    with col_pet:
+        target_name = st.selectbox("For which pet?", pet_names)
+    with col_freq:
+        frequency = st.selectbox("Repeats", ["daily", "weekly", "once"])
 
     if st.button("Add task"):
         target_pet = pets[pet_names.index(target_name)]
@@ -110,6 +114,7 @@ else:
                 duration=int(duration),
                 priority=priority,
                 start_time=start.strftime("%H:%M"),
+                frequency=frequency,
             )
         )
         st.success(f"Added '{task_title}' to {target_name} at {start.strftime('%H:%M')}.")
@@ -120,6 +125,34 @@ else:
             st.write(f"**{pet.name}'s tasks (by time):**")
             for task in Scheduler(pet.list_tasks(), owner.available_minutes).sort_by_time():
                 st.write(f"- {task.summary()}")
+
+st.divider()
+
+st.subheader("Complete a Task")
+st.caption("Completing a daily/weekly task automatically schedules its next occurrence.")
+
+# Pair each still-to-do task with its pet so we know where to add the next one.
+todo_pairs = [
+    (pet, task)
+    for pet in pets
+    for task in pet.list_tasks()
+    if task.status == TaskStatus.TODO
+]
+if not todo_pairs:
+    st.info("No tasks to complete yet.")
+else:
+    labels = [f"{pet.name}: {task.name} ({task.frequency})" for pet, task in todo_pairs]
+    choice = st.selectbox("Which task did you finish?", labels)
+    if st.button("Mark complete"):
+        chosen_pet, chosen_task = todo_pairs[labels.index(choice)]
+        # Pet.complete_task() marks it done and auto-creates the next occurrence.
+        upcoming = chosen_pet.complete_task(chosen_task)
+        if upcoming is not None:
+            st.success(
+                f"Done! Next '{upcoming.name}' scheduled for {upcoming.due_date}."
+            )
+        else:
+            st.success(f"Done! '{chosen_task.name}' does not repeat.")
 
 st.divider()
 

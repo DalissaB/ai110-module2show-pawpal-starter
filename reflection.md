@@ -77,6 +77,9 @@ gave the app a clear, single path from an owner's pets to a generated plan.
 
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
+My scheduler relies more on greedy picks the locally-best task at each step instead of searching for the globally-optimal combination.
+It's reasonable b/c task lists are tiny, so a full optimizer (like knapsack search) adds complexity for no practical gain. Greedy is also explainable  because it goes in strict priority order, explain() can honestly report why each task was included or skipped, which matches how a busy owner actually thinks about their day.
+
 
 ---
 
