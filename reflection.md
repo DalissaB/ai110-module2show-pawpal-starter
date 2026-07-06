@@ -2,6 +2,14 @@
 
 ## 1. System Design
 
+**Core user actions**
+
+PawPal+ helps a busy pet owner plan their pet's care. A user should be able to:
+
+1. **Add a pet and its care tasks** (like walks, feeding, or meds).
+2. **Generate a daily plan** from those tasks.
+3. **See today's plan** and why it was chosen.
+
 **a. Initial design**
 
 - Briefly describe your initial UML design.
