@@ -61,19 +61,78 @@ Daily plan: 2 task(s), 20/60 min used.
 
 ## 🧪 Testing PawPal+
 
+Run the full test suite from the repo root:
+
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
 
-Sample test output:
+### What the tests cover
+
+The 24 tests in `tests/test_pawpal.py` exercise the scheduling logic in
+`pawpal_system.py`, focusing on both happy paths and edge cases:
+
+- **Task & pet basics** — marking a task complete flips its status; adding a task
+  grows the pet's task list.
+- **Sorting correctness** — tasks return in chronological order by `start_time`
+  (including un-padded times like `"8:00"`), unscheduled tasks sort last, the
+  original list is left unmutated, and priority ordering ranks high → low with an
+  unknown priority sorting last.
+- **Filtering** — narrowing tasks by pet, by status, and by both at once.
+- **Recurrence logic** — completing a daily task creates a fresh `TODO` for the
+  next day; weekly advances +7 days; `"once"` does not recur; the successor
+  preserves the original's details; and repeated completions keep advancing.
+- **Conflict detection** — same-time tasks are flagged (three clashing tasks
+  produce all three pairwise warnings) and distinct/unscheduled times produce
+  none. One test documents a known limitation: `"8:00"` and `"08:00"` are not
+  detected as a clash because the check compares raw strings.
+- **Greedy scheduling (`generate_plan`)** — empty scheduler, exact-fit budget
+  boundary, tasks too big to fit (marked `SKIPPED`), high-priority preference
+  under a tight budget, repeatability across re-runs, and skipping tasks that are
+  already done.
+
+### Sample test output
 
 ```
-# Paste your pytest output here
+============================= test session starts ==============================
+platform darwin -- Python 3.13.13, pytest-9.1.0, pluggy-1.6.0
+rootdir: /Users/dalissabrisita/AI110/ai110-module2show-pawpal-starter
+plugins: anyio-4.13.0
+collected 24 items
+
+tests/test_pawpal.py::test_mark_complete_changes_status PASSED           [  4%]
+tests/test_pawpal.py::test_adding_task_increases_pet_task_count PASSED   [  8%]
+tests/test_pawpal.py::test_sort_by_time_orders_chronologically PASSED    [ 12%]
+tests/test_pawpal.py::test_filter_tasks_by_pet_and_status PASSED         [ 16%]
+tests/test_pawpal.py::test_completing_recurring_task_creates_next_occurrence PASSED [ 20%]
+tests/test_pawpal.py::test_weekly_task_advances_seven_days_and_once_does_not_recur PASSED [ 25%]
+tests/test_pawpal.py::test_scheduler_detects_same_time_conflict PASSED   [ 29%]
+tests/test_pawpal.py::test_scheduler_reports_no_conflicts_when_times_differ PASSED [ 33%]
+tests/test_pawpal.py::test_sort_by_time_leaves_original_list_unchanged PASSED [ 37%]
+tests/test_pawpal.py::test_sort_by_time_handles_non_zero_padded_times PASSED [ 41%]
+tests/test_pawpal.py::test_sort_by_time_with_all_unscheduled_keeps_them_all PASSED [ 45%]
+tests/test_pawpal.py::test_sort_tasks_orders_by_priority_then_duration PASSED [ 50%]
+tests/test_pawpal.py::test_unknown_priority_sorts_last PASSED            [ 54%]
+tests/test_pawpal.py::test_recurring_next_occurrence_preserves_task_details PASSED [ 58%]
+tests/test_pawpal.py::test_completing_task_twice_advances_the_date_each_time PASSED [ 62%]
+tests/test_pawpal.py::test_three_tasks_at_same_time_produce_three_pairwise_conflicts PASSED [ 66%]
+tests/test_pawpal.py::test_conflict_check_ignores_unscheduled_tasks PASSED [ 70%]
+tests/test_pawpal.py::test_conflict_check_is_string_based_not_time_based PASSED [ 75%]
+tests/test_pawpal.py::test_generate_plan_on_empty_scheduler PASSED       [ 79%]
+tests/test_pawpal.py::test_generate_plan_includes_task_that_fits_exactly PASSED [ 83%]
+tests/test_pawpal.py::test_generate_plan_skips_task_larger_than_budget PASSED [ 87%]
+tests/test_pawpal.py::test_generate_plan_prefers_high_priority_when_budget_is_tight PASSED [ 91%]
+tests/test_pawpal.py::test_generate_plan_is_repeatable_across_runs PASSED [ 95%]
+tests/test_pawpal.py::test_generate_plan_skips_already_completed_tasks PASSED [100%]
+
+============================== 24 passed in 0.02s ==============================
 ```
+
+### Confidence Level: ⭐⭐⭐⭐⭐ (5/ 5)
+
+All 24 tests pass and cover the core scheduling behaviors plus their edge cases,
+so I'm confident the logic layer is reliable for the intended demo scenarios.
+
 
 ## 📐 Smarter Scheduling
 
