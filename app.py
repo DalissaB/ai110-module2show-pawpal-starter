@@ -121,10 +121,23 @@ else:
 
     # Show each pet's tasks in chronological order using sort_by_time().
     for pet in pets:
-        if pet.list_tasks():
+        pet_tasks = pet.list_tasks()
+        if pet_tasks:
             st.write(f"**{pet.name}'s tasks (by time):**")
-            for task in Scheduler(pet.list_tasks(), owner.available_minutes).sort_by_time():
-                st.write(f"- {task.summary()}")
+            ordered = Scheduler(pet_tasks, owner.available_minutes).sort_by_time()
+            st.table(
+                [
+                    {
+                        "Time": task.start_time or "—",
+                        "Task": task.name,
+                        "Duration": f"{task.duration} min",
+                        "Priority": task.priority,
+                        "Repeats": task.frequency,
+                        "Status": task.status.value,
+                    }
+                    for task in ordered
+                ]
+            )
 
 st.divider()
 
@@ -156,11 +169,96 @@ else:
 
 st.divider()
 
+st.subheader("Browse Tasks")
+st.caption("Filter the owner's tasks by pet and status, then view them sorted by priority.")
+
+if not pets:
+    st.info("Add a pet and some tasks to browse them here.")
+else:
+    fcol1, fcol2 = st.columns(2)
+    with fcol1:
+        pet_filter = st.selectbox("Pet", ["All pets"] + [pet.name for pet in pets])
+    with fcol2:
+        status_filter = st.selectbox("Status", ["All"] + [s.value for s in TaskStatus])
+
+    # Owner.filter_tasks() narrows by pet and/or status (None means "no filter").
+    filtered = owner.filter_tasks(
+        pet_name=None if pet_filter == "All pets" else pet_filter,
+        status=None if status_filter == "All" else status_filter,
+    )
+    # Present the filtered tasks in priority order via Scheduler.sort_tasks().
+    ordered = Scheduler(filtered, owner.available_minutes).sort_tasks()
+    if ordered:
+        st.table(
+            [
+                {
+                    "Priority": task.priority,
+                    "Time": task.start_time or "—",
+                    "Task": task.name,
+                    "Duration": f"{task.duration} min",
+                    "Status": task.status.value,
+                }
+                for task in ordered
+            ]
+        )
+    else:
+        st.info("No tasks match those filters.")
+
+st.divider()
+
 st.subheader("Build Schedule")
 st.caption("Runs your Scheduler on all of the owner's tasks within the time budget.")
+
+if pets:
+    # Check for time clashes on every rerun so the owner is warned immediately.
+    # find_conflicts() doesn't mutate any task, so it's safe to run here.
+    live_scheduler = owner.build_scheduler()
+    warnings = live_scheduler.conflict_warnings()
+    if warnings:
+        st.warning(
+            f"**{len(warnings)} scheduling conflict(s) found.** "
+            "These tasks are set for the same time — you can only be in one place "
+            "at once, so consider moving one task in each pair to a different time."
+        )
+        for message in warnings:
+            st.warning(message)
+    else:
+        st.success("No scheduling conflicts — every task has its own time. 🎉")
 
 if st.button("Generate schedule"):
     # Owner.build_scheduler() gathers every pet's tasks and hands them to a Scheduler.
     scheduler = owner.build_scheduler()
     scheduler.generate_plan()
-    st.text(scheduler.explain())
+
+    used = sum(t.duration for t in scheduler.plan)
+    mcol1, mcol2, mcol3 = st.columns(3)
+    mcol1.metric("Tasks planned", len(scheduler.plan))
+    mcol2.metric("Minutes used", f"{used}/{scheduler.available_minutes}")
+    mcol3.metric("Tasks skipped", len(scheduler.skipped))
+
+    if scheduler.plan:
+        st.success(f"Planned {len(scheduler.plan)} task(s) within the time budget.")
+        # Show the chosen tasks in chronological order — how an owner reads a day.
+        ordered_plan = Scheduler(scheduler.plan, scheduler.available_minutes).sort_by_time()
+        st.table(
+            [
+                {
+                    "Time": task.start_time or "—",
+                    "Task": task.name,
+                    "Duration": f"{task.duration} min",
+                    "Priority": task.priority,
+                }
+                for task in ordered_plan
+            ]
+        )
+    else:
+        st.info("Nothing fit in the plan yet — add tasks or raise the time budget.")
+
+    if scheduler.skipped:
+        st.warning("Left out of today's plan:")
+        st.table(
+            [
+                {"Task": task.name, "Duration": f"{task.duration} min", "Reason": reason}
+                for task, reason in scheduler.skipped
+            ]
+        )

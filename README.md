@@ -1,26 +1,47 @@
 # PawPal+ (Module 2 Project)
 
-You are building **PawPal+**, a Streamlit app that helps a pet owner plan care tasks for their pet.
+**PawPal+** is a Streamlit app that helps a busy pet owner stay consistent with
+pet care. Enter your pets and their care tasks, and PawPal+ builds an explainable
+daily plan that respects your time budget, task priorities, and scheduled times.
 
 ## Scenario
 
-A busy pet owner needs help staying consistent with pet care. They want an assistant that can:
+A busy pet owner needs help staying consistent with pet care. PawPal+ acts as an
+assistant that can:
 
 - Track pet care tasks (walks, feeding, meds, enrichment, grooming, etc.)
 - Consider constraints (time available, priority, owner preferences)
 - Produce a daily plan and explain why it chose that plan
 
-Your job is to design the system first (UML), then implement the logic in Python, then connect it to the Streamlit UI.
+The system was designed UML-first, implemented as a standalone logic layer
+(`pawpal_system.py`), covered with tests (`tests/test_pawpal.py`), and connected
+to an interactive Streamlit UI (`app.py`).
 
-## What you will build
+## ✨ Features
 
-Your final app should:
+PawPal+ implements the following scheduling algorithms and behaviors. All logic
+lives in `pawpal_system.py` and is exercised by the demo in `main.py`.
 
-- Let a user enter basic owner + pet info
-- Let a user add/edit tasks (duration + priority at minimum)
-- Generate a daily schedule/plan based on constraints and priorities
-- Display the plan clearly (and ideally explain the reasoning)
-- Include tests for the most important scheduling behaviors
+- **Priority-first scheduling** — a greedy `generate_plan()` walks tasks in
+  priority order (high → low, shortest-duration first as a tiebreak) and includes
+  each one that still fits the remaining daily time budget.
+- **Sorting by priority** — `Scheduler.sort_tasks()` orders tasks by priority
+  rank, then duration; this is the order the planner consumes.
+- **Sorting by time** — `Scheduler.sort_by_time()` orders tasks chronologically
+  by their `"HH:MM"` start time (converted to minutes-since-midnight, so
+  un-padded times like `"8:00"` still sort correctly); unscheduled tasks sort last.
+- **Filtering** — `Owner.filter_tasks(pet_name, status)` narrows tasks by pet,
+  by completion status, or both.
+- **Conflict warnings** — `Scheduler.find_conflicts()` / `conflict_warnings()`
+  detect tasks that share a start time (an owner can't be in two places at once)
+  and return friendly warning strings instead of crashing.
+- **Daily / weekly recurrence** — `Task.next_occurrence()` and
+  `Pet.complete_task()` auto-generate the next instance of a recurring task
+  (`+1 day` for daily, `+7 days` for weekly) when it's completed; `"once"` tasks
+  don't repeat.
+- **Time-budget enforcement & skip reasons** — tasks that don't fit are marked
+  `SKIPPED` with an explanation, and `Scheduler.explain()` reports why each task
+  was included or left out.
 
 ## Getting started
 
@@ -41,23 +62,6 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
-
-## 🖥️ Sample Output
-
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
-
-Today's Schedule for [OWNER NAME]
-Rex (dog):
-Daily plan: 2 task(s), 40/60 min used.
-  ✓ Feed breakfast (10 min, high)
-  ✓ Morning walk (30 min, high)
-  ✗ Long groom — skipped: needs 45 min, only 20 left
-
-Mia (cat):
-Daily plan: 2 task(s), 20/60 min used.
-  ✓ Vet meds (15 min, high)
-  ✓ Feed breakfast (5 min, medium)
-```
 
 ## 🧪 Testing PawPal+
 
@@ -189,14 +193,135 @@ together: it marks the task `DONE` and, if it recurs, automatically adds the nex
 occurrence to the pet — so a daily walk reappears tomorrow and a weekly groom
 reappears next week.
 
-## 📸 Demo Walkthrough
+## 🎬 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Launch the interactive app with:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+```bash
+streamlit run app.py
+```
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+### Main UI features
+
+The Streamlit UI (`app.py`) is a single scrolling page with these sections:
+
+- **Owner** — set the owner's name and daily time budget (available minutes).
+- **Add a Pet** — name a pet and pick a species; added pets are listed with a
+  live task count.
+- **Add a Task** — give a task a title, duration, priority, start time, target
+  pet, and repeat frequency (daily / weekly / once). Each pet's tasks are shown
+  in a table, sorted chronologically by start time.
+- **Complete a Task** — mark a task done; a recurring task automatically
+  schedules its next occurrence and the app confirms the new due date.
+- **Browse Tasks** — filter all tasks by pet and/or status and view them in a
+  priority-sorted table.
+- **Build Schedule** — always-on conflict warnings plus a one-click daily plan
+  shown with summary metrics (tasks planned, minutes used, tasks skipped), a
+  time-ordered table of chosen tasks, and a table of skipped tasks with reasons.
+
+### Example workflow
+
+1. In **Owner**, set your name and a daily budget (e.g. 60 minutes).
+2. In **Add a Pet**, add `Rex` (dog) and `Mia` (cat).
+3. In **Add a Task**, give Rex a `Morning walk` (30 min, high priority, 08:00,
+   daily) and a `Long groom` (45 min, low, 15:00, weekly); give Mia `Play time`
+   (10 min, low, 08:00, daily) — deliberately at the same time as Rex's walk.
+4. Scroll to **Build Schedule** — a conflict warning appears immediately because
+   two tasks share the 08:00 slot.
+5. Click **Generate schedule** to see today's plan: high-priority tasks are kept
+   within the budget, lower-priority tasks that don't fit are listed as skipped
+   with the reason.
+6. Back in **Complete a Task**, mark the `Morning walk` done — PawPal+ confirms
+   it has scheduled tomorrow's walk automatically.
+
+### Key Scheduler behaviors on display
+
+- **Sorting by time** — tasks reorder chronologically regardless of the order
+  they were added.
+- **Conflict warnings** — same-time tasks are flagged (`⚠️ Conflict at 08:00: …`)
+  before any plan is built.
+- **Filtering** — the Browse Tasks table narrows by pet and status.
+- **Priority-first planning with a time budget** — `generate_plan()` fills the
+  budget high-priority-first and explains every skip.
+- **Daily / weekly recurrence** — completing a task rolls a daily task to
+  tomorrow and a weekly task to next week.
+
+### Sample CLI output
+
+The same logic layer can be exercised without Streamlit by running the demo
+script, which builds a small owner/pet/task setup and prints the results:
+
+```bash
+python main.py
+```
+
+```text
+Dalissa's pets:
+  - Rex (dog)
+      * Long groom at 15:00 — 45 min, low priority, weekly (due 2026-07-05) [todo]
+      * Morning walk at 08:00 — 30 min, high priority, daily (due 2026-07-05) [todo]
+      * Feed breakfast at 07:30 — 10 min, high priority, daily (due 2026-07-05) [todo]
+  - Mia (cat)
+      * Vet meds at 12:30 — 15 min, high priority, daily (due 2026-07-05) [done]
+      * Feed breakfast at 07:45 — 5 min, medium priority, daily (due 2026-07-05) [todo]
+      * Play time at 08:00 — 10 min, low priority, daily (due 2026-07-05) [todo]
+
+========================================
+All tasks sorted by time
+========================================
+  Feed breakfast at 07:30 — 10 min, high priority, daily (due 2026-07-05) [todo]
+  Feed breakfast at 07:45 — 5 min, medium priority, daily (due 2026-07-05) [todo]
+  Morning walk at 08:00 — 30 min, high priority, daily (due 2026-07-05) [todo]
+  Play time at 08:00 — 10 min, low priority, daily (due 2026-07-05) [todo]
+  Vet meds at 12:30 — 15 min, high priority, daily (due 2026-07-05) [done]
+  Long groom at 15:00 — 45 min, low priority, weekly (due 2026-07-05) [todo]
+
+========================================
+Conflict detection
+========================================
+⚠️ Conflict at 08:00: 'Morning walk' overlaps with 'Play time'.
+
+========================================
+Filtering
+========================================
+Rex's tasks only:
+  Long groom at 15:00 — 45 min, low priority, weekly (due 2026-07-05) [todo]
+  Morning walk at 08:00 — 30 min, high priority, daily (due 2026-07-05) [todo]
+  Feed breakfast at 07:30 — 10 min, high priority, daily (due 2026-07-05) [todo]
+
+Still to do (status == todo):
+  Long groom at 15:00 — 45 min, low priority, weekly (due 2026-07-05) [todo]
+  Morning walk at 08:00 — 30 min, high priority, daily (due 2026-07-05) [todo]
+  Feed breakfast at 07:30 — 10 min, high priority, daily (due 2026-07-05) [todo]
+  Feed breakfast at 07:45 — 5 min, medium priority, daily (due 2026-07-05) [todo]
+  Play time at 08:00 — 10 min, low priority, daily (due 2026-07-05) [todo]
+
+Already done (status == done):
+  Vet meds at 12:30 — 15 min, high priority, daily (due 2026-07-05) [done]
+
+========================================
+Today's Schedule for Dalissa
+========================================
+
+Rex (dog):
+Daily plan: 2 task(s), 40/60 min used.
+  ✓ Feed breakfast (10 min, high)
+  ✓ Morning walk (30 min, high)
+  ✗ Long groom — skipped: needs 45 min, only 20 left
+
+Mia (cat):
+Daily plan: 2 task(s), 15/60 min used.
+  ✓ Feed breakfast (5 min, medium)
+  ✓ Play time (10 min, low)
+  ✗ Vet meds — skipped: already completed
+
+========================================
+Recurring tasks
+========================================
+
+Completing: Morning walk at 08:00 — 30 min, high priority, daily (due 2026-07-05) [todo]
+  -> next occurrence: Morning walk at 08:00 — 30 min, high priority, daily (due 2026-07-06) [todo]
+
+Completing: Long groom at 15:00 — 45 min, low priority, weekly (due 2026-07-05) [skipped]
+  -> next occurrence: Long groom at 15:00 — 45 min, low priority, weekly (due 2026-07-12) [todo]
+```

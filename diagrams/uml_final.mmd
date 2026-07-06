@@ -1,0 +1,65 @@
+classDiagram
+    class TaskStatus {
+        <<enumeration>>
+        TODO
+        DONE
+        SKIPPED
+    }
+
+    class Task {
+        +str name
+        +int duration
+        +str priority
+        +str frequency
+        +str start_time
+        +date due_date
+        +TaskStatus status
+        +mark_complete()
+        +mark_incomplete()
+        +mark_skipped()
+        +next_occurrence() Task
+        +priority_rank() int
+        +summary() str
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +list~Task~ tasks
+        +add_task(task)
+        +remove_task(task)
+        +list_tasks() list
+        +complete_task(task) Task
+    }
+
+    class Owner {
+        +str name
+        +int available_minutes
+        +str preferences
+        +list~Pet~ pets
+        +add_pet(pet)
+        +list_pets() list
+        +all_tasks() list
+        +filter_tasks(pet_name, status) list
+        +build_scheduler() Scheduler
+    }
+
+    class Scheduler {
+        +list~Task~ tasks
+        +int available_minutes
+        +list~Task~ plan
+        +list skipped
+        +sort_tasks() list
+        +sort_by_time() list
+        +find_conflicts() list
+        +conflict_warnings() list
+        +generate_plan() list
+        +explain() str
+    }
+
+    Owner "1" --> "*" Pet : has
+    Pet "1" --> "*" Task : has
+    Owner ..> Scheduler : build_scheduler creates
+    Scheduler ..> Task : schedules
+    Task --> TaskStatus : status
+    Task ..> Task : next_occurrence creates
